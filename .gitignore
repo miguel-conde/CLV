@@ -1,0 +1,7 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+PYTHON/__pycache__/
+PYTHON/prjpkg/__pycache__/
+PYTHON/projpkg.egg-info/
