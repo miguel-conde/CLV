@@ -7,3 +7,5 @@ DIR_OUTPUTS <- here::here('outputs')
 
 DIR_OUTPUTS_REPORTS <- file.path(DIR_OUTPUTS, 'reports')
 DIR_OUTPUTS_FILES <- file.path(DIR_OUTPUTS, 'files')
+
+FILE_CLTV_DATA <- file.path(DIR_RAW_DATA, "Online Retail.xlsx")
