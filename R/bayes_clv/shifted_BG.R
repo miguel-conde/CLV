@@ -98,7 +98,7 @@ extract(sbg_model_0)$beta %>% hist()
 
 model_data <- model_data_all %>% filter(t < 8)
 
-STAN_FILE <- here::here("clv", "s-BG.stan")
+STAN_FILE <- here::here("stan", "s-BG.stan")
 # STAN_FILE <- here::here("clv", "tst_stan.stan")
 
 options(mc.cores = parallel:: detectCores())
