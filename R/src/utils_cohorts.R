@@ -214,3 +214,86 @@ build_rf_table <- function(probe) {
   
   return(out)
 }
+
+
+# Bug BYTD ----------------------------------------------------------------
+
+my_dc.MakeRFmatrixCal <- 
+  function (frequencies, periods.of.final.purchases, num.of.purchase.periods, 
+            holdout.frequencies = NULL) 
+{
+  if (!is.numeric(periods.of.final.purchases)) {
+    stop("periods.of.final.purchases must be numeric")
+  }
+  if (length(periods.of.final.purchases) != length(frequencies)) {
+    stop(paste("number of customers in frequencies is not equal", 
+               "to the last purchase period vector"))
+  }
+  rf.mx.skeleton <- dc.MakeRFmatrixSkeleton(num.of.purchase.periods)
+  if (is.null(holdout.frequencies)) {
+    RF.matrix <- cbind(rf.mx.skeleton, num.of.purchase.periods, 
+                       0)
+    colnames(RF.matrix) <- c("x", "t.x", "n.cal", "custs")
+  }
+  else {
+    RF.matrix <- cbind(rf.mx.skeleton, num.of.purchase.periods, 
+                       0, 0)
+    colnames(RF.matrix) <- c("x", "t.x", "n.cal", "custs", 
+                             "x.star")
+  }
+  rf.n.custs <- cbind(frequencies, periods.of.final.purchases, 
+                      holdout.frequencies)
+  zeroes.rf.subset <- which(rf.n.custs[, 1] == 0)
+  RF.matrix[1, 4] <- length(zeroes.rf.subset)
+  if (!is.null(holdout.frequencies)) {
+    RF.matrix[1, 5] <- sum(holdout.frequencies[zeroes.rf.subset])
+  }
+  # rf.n.custs <- rf.n.custs[-zeroes.rf.subset, ]
+  if (length(zeroes.rf.subset) > 0) rf.n.custs <- rf.n.custs[-zeroes.rf.subset, ]
+  rf.n.custs <- rf.n.custs[order(rf.n.custs[, 1], rf.n.custs[, 
+                                                             2]), ]
+  current.pair <- c(rf.n.custs[1, 1], rf.n.custs[1, 2])
+  same.item.in.a.row.counter <- 1
+  if (!is.null(holdout.frequencies)) {
+    x.star.total <- rf.n.custs[1, 3]
+  }
+  num.count.points <- nrow(rf.n.custs)
+  for (ii in 2:num.count.points) {
+    last.pair <- current.pair
+    current.pair <- c(rf.n.custs[ii, 1], rf.n.custs[ii, 2])
+    if (identical(last.pair, current.pair)) {
+      same.item.in.a.row.counter <- same.item.in.a.row.counter + 
+        1
+      if (!is.null(holdout.frequencies)) {
+        x.star.total <- x.star.total + rf.n.custs[ii, 
+                                                  3]
+      }
+    }
+    else {
+      x <- last.pair[1]
+      t.x <- last.pair[2]
+      corresponding.rf.index <- (x - 1) + 1 + t.x * (t.x - 
+                                                       1)/2 + 1
+      RF.matrix[corresponding.rf.index, 4] <- same.item.in.a.row.counter
+      same.item.in.a.row.counter <- 1
+      if (!is.null(holdout.frequencies)) {
+        RF.matrix[corresponding.rf.index, 5] <- x.star.total
+        x.star.total <- rf.n.custs[ii, 3]
+      }
+    }
+    if (ii == num.count.points) {
+      x <- current.pair[1]
+      t.x <- current.pair[2]
+      corresponding.rf.index <- (x - 1) + 1 + t.x * (t.x - 
+                                                       1)/2 + 1
+      RF.matrix[corresponding.rf.index, 4] <- same.item.in.a.row.counter
+      same.item.in.a.row.counter <- NULL
+      if (!is.null(holdout.frequencies)) {
+        RF.matrix[corresponding.rf.index, 5] <- x.star.total
+        x.star.total = NULL
+      }
+    }
+  }
+  return(RF.matrix)
+}
+
