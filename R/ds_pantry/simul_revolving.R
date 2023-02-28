@@ -129,7 +129,7 @@ cal.cbs %>% head()
 freq<- cal.cbs[,"x"]
 rec <- cal.cbs[,"t.x"]
 trans.opp <- 22 # transaction opportunities, cohorte feb => 23 - 1 (1ª transacción)
-cal.rf.matrix <- dc.MakeRFmatrixCal(freq, rec, trans.opp)
+cal.rf.matrix <- my_dc.MakeRFmatrixCal(freq, rec, trans.opp)
 
 # Parameter Estimation ----------------------------------------------------
 
@@ -163,7 +163,7 @@ bgbb.Expectation(params, n=10)
 
 # A, who made 0 transactions in the calibration period; 
 # customer A
-n.cal  = 22  # number of transaction opportunities in the calibration period.
+n.cal  = 22 # number of transaction opportunities in the calibration period.
 n.star = 12 # number of transaction opportunities in the holdout period,
 x      = 0  # number of repeat transactions made by the customer in the calibration period.
 t.x    = 0  # recency - the transaction opportunity in which the customer made their last transaction
@@ -178,6 +178,54 @@ x   = 23
 t.x = 30
 bgbb.ConditionalExpectedTransactions(params, n.cal,
                                      n.star, x, t.x)
+
+# We can also obtain expected characteristics for a specific customer, conditional 
+# on their purchasing behavior during the calibration period.
+cal.cbs["516",]
+
+x     <- cal.cbs["516", "x"]
+t.x   <- cal.cbs["516", "t.x"]
+n.cal <- cal.cbs["516", "T.cal"]
+bgbb.ConditionalExpectedTransactions(params, n.cal,
+                                     n.star, x, t.x)
+
+bgbb.PAlive(params, x, t.x, n.cal)
+
+
+# Plotting/ Goodness-of-fit -----------------------------------------------
+
+bgbb.PlotFrequencyInCalibration(params = params,
+                                rf.matrix = cal.rf.matrix, 
+                                censor = 15)
+
+## Holdout
+# dc.ElogToCbsCbt
+# produces both a calibration period customer-by-sufficient-statistic matrix and a
+# holdout period customer-by-sufficient-statistic matrix, which could be combined
+# in order to find the number of transactions each customer made in the holdout
+# period.
+#  Note that I subtract the number of repeat
+# transactions in the calibration period from the total number of transactions. We
+# remove the initial transactions first as we are not concerned with them.
+
+# Auxiliary Event log - nos quedamos solo con las trasacciones de repetición
+aux_elog <- dc.SplitUpElogForRepeatTrans(elog)$repeat.trans.elog
+
+# En x.start vamos a añadir a cal.cbs las frecuencias de holdout
+x.star <- rep(0, nrow(cal.cbs))
+cal.cbs <- cbind(cal.cbs, x.star)
+elog.custs <- aux_elog$cust
+
+# Recorremos por fila cal.cbs
+for (i in 1:nrow(cal.cbs)){
+  current.cust         <- rownames(cal.cbs)[i]
+  tot.cust.trans       <- length(which(aux_elog == current.cust))
+  cal.trans            <- cal.cbs[i, "x"]
+  cal.cbs[i, "x.star"] <- tot.cust.trans - cal.trans
+}
+
+round(cal.cbs[1:3,], digits = 3)
+
 
 # Intento 1 ---------------------------------------------------------------
 
