@@ -205,7 +205,7 @@ build_rf_table <- function(probe) {
   
   aux <- probe %>% spread(date, sales) %>% select(-id) 
   
-  out <- tibble(f = aux %>% rowSums(na.rm = TRUE),
+  out <- tibble(f = aux %>% rowSums(na.rm = TRUE)-1,
                 r = aux %>% apply(1, function(x) max(which(x == 1)))) %>% 
     group_by(f, r) %>% 
     summarise(n = n(), .groups = "drop") %>% 
