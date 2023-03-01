@@ -295,5 +295,238 @@ my_dc.MakeRFmatrixCal <-
     }
   }
   return(RF.matrix)
+  }
+
+my_bgbb.PlotFreqVsConditionalExpectedFrequency <- 
+  function (params, n.star, rf.matrix, x.star, trunc = NULL, xlab = "Calibration period transactions", 
+            ylab = "Holdout period transactions", xticklab = NULL, title = "Conditional Expectation") 
+  {
+  if (length(x.star) != nrow(rf.matrix)) 
+    stop("x.star must have the same number of entries as rows in rf.matrix")
+  if (!(length(n.star) == 1 || length(n.star) == nrow(rf.matrix))) 
+    stop("n.star must be a single value or have as many entries as rows in rf.matrix")
+  dc.check.model.params(printnames = c("r", "alpha", "s", "beta"), 
+                        params = params, func = "bgbb.PlotFreqVsConditionalExpectedFrequency")
+  if (any(x.star < 0) || !is.numeric(x.star)) 
+    stop("x.star must be numeric and may not contain negative numbers.")
+  if (any(n.star < 0) || !is.numeric(n.star)) 
+    stop("n.star must be numeric and may not contain negative numbers.")
+  n.star <- rep(n.star, length.out = nrow(rf.matrix))
+  tryCatch(x <- rf.matrix[, "x"], error = function(e) stop("Error in bgbb.PlotFreqVsConditionalExpectedFrequency: rf.matrix must have a frequency column labelled \"x\""))
+  tryCatch(t.x <- rf.matrix[, "t.x"], error = function(e) stop("Error in bgbb.PlotFreqVsConditionalExpectedFrequency: rf.matrix must have a recency column labelled \"t.x\""))
+  tryCatch(n.cal <- rf.matrix[, "n.cal"], error = function(e) stop("Error in bgbb.PlotFreqVsConditionalExpectedFrequency: rf.matrix must have a column for number of transaction opportunities in the calibration period, labelled \"n.cal\""))
+  tryCatch(custs <- rf.matrix[, "custs"], error = function(e) stop("Error in bgbb.PlotFreqVsConditionalExpectedFrequency: rf.matrix must have a column for the number of customers that have each combination of \"x\", \"t.x\", and \"n.cal\", labelled \"custs\""))
+  if (is.null(trunc)) 
+    trunc <- max(n.cal)
+  if (trunc > max(n.cal)) {
+    warning("The truncation number provided in bgbb.PlotFreqVsConditionalExpectedFrequency was greater than the maximum number of possible transactions. It has been reduced to ", 
+            max(n.cal))
+    trunc = max(n.cal)
+  }
+  actual.freq <- rep(0, max(n.cal) + 1)
+  expected.freq <- rep(0, max(n.cal) + 1)
+  bin.size <- rep(0, max(n.cal) + 1)
+  for (ii in 0:max(n.cal)) {
+    bin.size[ii + 1] <- sum(custs[x == ii])
+    actual.freq[ii + 1] <- sum(x.star[x == ii])
+    expected.freq[ii + 1] <- sum(bgbb.ConditionalExpectedTransactions(params, 
+                                                                      n.cal[x == ii], n.star[x == ii], ii, t.x[x == ii]) * 
+                                   custs[x == ii])
+  }
+  comparison <- rbind(actual.freq/bin.size, expected.freq/bin.size, 
+                      bin.size)
+  colnames(comparison) <- paste("freq.", 0:max(n.cal), sep = "")
+  if (is.null(xticklab) == FALSE) {
+    x.labels <- xticklab
+  }
+  else {
+    if ((trunc + 1) < ncol(comparison)) {
+      x.labels <- 0:(trunc)
+    }
+    else {
+      x.labels <- 0:(ncol(comparison) - 1)
+    }
+  }
+  actual.freq <- comparison[1, 1:(trunc + 1)]
+  expected.freq <- comparison[2, 1:(trunc + 1)]
+  custs.in.plot <- sum(comparison[3, 1:(trunc + 1)])
+  if (custs.in.plot < 0.9 * sum(custs)) {
+    warning("Less than 90% of customers are represented in your plot (", 
+            custs.in.plot, " of ", sum(custs), " are plotted).")
+  }
+  # Faltaba na.rm = TRUE
+  ylim <- c(0, ceiling(max(c(actual.freq, expected.freq), na.rm = TRUE) * 
+                         1.1))
+  plot(actual.freq, type = "l", xaxt = "n", col = 1, ylim = ylim, 
+       xlab = xlab, ylab = ylab, main = title)
+  lines(expected.freq, lty = 2, col = 2)
+  axis(1, at = 1:(trunc + 1), labels = x.labels)
+  legend("topleft", legend = c("Actual", "Model"), col = 1:2, 
+         lty = 1:2, lwd = 1)
+  return(comparison)
 }
 
+my_bgbb.PlotRecVsConditionalExpectedFrequency <- 
+  function (params, n.star, rf.matrix, x.star, trunc = NULL, xlab = "Calibration period recency", 
+            ylab = "Holdout period transactions", xticklab = NULL, title = "Conditional Expected Transactions by Recency") 
+  {
+  if (length(x.star) != nrow(rf.matrix)) 
+    stop("x.star must have the same number of entries as rows in rf.matrix")
+  if (!(length(n.star) == 1 || length(n.star) == nrow(rf.matrix))) 
+    stop("n.star must be a single value or have as many entries as rows in rf.matrix")
+  dc.check.model.params(printnames = c("r", "alpha", "s", "beta"), 
+                        params = params, func = "bgbb.PlotRecVsConditionalExpectedFrequency")
+  if (any(x.star < 0) || !is.numeric(x.star)) 
+    stop("x.star must be numeric and may not contain negative numbers.")
+  if (any(n.star < 0) || !is.numeric(n.star)) 
+    stop("n.star must be numeric and may not contain negative numbers.")
+  n.star <- rep(n.star, length.out = nrow(rf.matrix))
+  tryCatch(x <- rf.matrix[, "x"], error = function(e) stop("Error in bgbb.PlotRecVsConditionalExpectedFrequency: rf.matrix must have a frequency column labelled \"x\""))
+  tryCatch(t.x <- rf.matrix[, "t.x"], error = function(e) stop("Error in bgbb.PlotRecVsConditionalExpectedFrequency: rf.matrix must have a recency column labelled \"t.x\""))
+  tryCatch(n.cal <- rf.matrix[, "n.cal"], error = function(e) stop("Error in bgbb.PlotRecVsConditionalExpectedFrequency: rf.matrix must have a column for number of transaction opportunities in the calibration period, labelled \"n.cal\""))
+  tryCatch(custs <- rf.matrix[, "custs"], error = function(e) stop("Error in bgbb.PlotRecVsConditionalExpectedFrequency: rf.matrix must have a column for the number of customers that have each combination of \"x\", \"t.x\", and \"n.cal\", labelled \"custs\""))
+  if (is.null(trunc)) 
+    trunc <- max(n.cal)
+  if (trunc > max(n.cal)) {
+    warning("The truncation number provided in bgbb.PlotRecVsConditionalExpectedFrequency was greater than the maximum number of possible transactions. It has been reduced to ", 
+            max(n.cal))
+    trunc = max(n.cal)
+  }
+  actual.freq <- rep(0, max(n.cal) + 1)
+  expected.freq <- rep(0, max(n.cal) + 1)
+  bin.size <- rep(0, max(n.cal) + 1)
+  for (ii in 0:max(n.cal)) {
+    bin.size[ii + 1] <- sum(custs[t.x == ii])
+    actual.freq[ii + 1] <- sum(x.star[t.x == ii])
+    expected.freq[ii + 1] <- sum(bgbb.ConditionalExpectedTransactions(params, 
+                                                                      n.cal[t.x == ii], n.star[t.x == ii], x[t.x == ii], 
+                                                                      ii) * custs[t.x == ii])
+  }
+  comparison <- rbind(actual.freq/bin.size, expected.freq/bin.size, 
+                      bin.size)
+  colnames(comparison) <- paste("rec.", 0:max(n.cal), sep = "")
+  custs.in.plot <- sum(comparison[3, 1:(trunc + 1)])
+  if (custs.in.plot < 0.9 * sum(custs)) {
+    warning("Less than 90% of customers are represented in your plot (", 
+            custs.in.plot, " of ", sum(custs), " are plotted).")
+  }
+  if (is.null(xticklab) == FALSE) {
+    x.labels <- xticklab
+  }
+  else {
+    if ((trunc + 1) < ncol(comparison)) {
+      x.labels <- 0:(trunc)
+    }
+    else {
+      x.labels <- 0:(ncol(comparison) - 1)
+    }
+  }
+  actual.freq <- comparison[1, 1:(trunc + 1)]
+  expected.freq <- comparison[2, 1:(trunc + 1)]
+  # Faltaba na.rm = TRUE
+  ylim <- c(0, ceiling(max(c(actual.freq, expected.freq), na.rm = TRUE) * 
+                         1.1))
+  plot(actual.freq, type = "l", xaxt = "n", col = 1, ylim = ylim, 
+       xlab = xlab, ylab = ylab, main = title)
+  lines(expected.freq, lty = 2, col = 2)
+  axis(1, at = 1:(trunc + 1), labels = x.labels)
+  legend("topleft", legend = c("Actual", "Model"), col = 1:2, 
+         lty = 1:2, lwd = 1)
+  return(comparison)
+}
+
+####
+# my_dc.ElogToCbsCbt <- function (elog, per = "week", T.cal = max(elog$date), T.tot = max(elog$date), 
+#                                 merge.same.date = TRUE, cohort.birth.per = T.cal, dissipate.factor = 1, 
+#                                 statistic = "freq") 
+# {
+#   dc.WriteLine("Started making CBS and CBT from the ELOG...")
+#   elog <- dc.FilterCustByBirth(elog, cohort.birth.per)
+#   if (nrow(elog) == 0) 
+#     stop("error caused by customer birth filtering")
+#   elog <- elog[elog$date <= T.tot, ]
+#   if (nrow(elog) == 0) 
+#     stop("error caused by holdout period end date")
+#   elog <- dc.DissipateElog(elog, dissipate.factor)
+#   if (nrow(elog) == 0) 
+#     stop("error caused by event long dissipation")
+#   if (merge.same.date) {
+#     elog <- dc.MergeTransactionsOnSameDate(elog)
+#     if (nrow(elog) == 0) 
+#       stop("error caused by event log merging")
+#   }
+#   calibration.elog <- elog[elog$date <= T.cal, ]
+#   holdout.elog <- elog[elog$date > T.cal, ]
+#   split.elog.list <- dc.SplitUpElogForRepeatTrans(calibration.elog)
+#   repeat.transactions.elog <- split.elog.list$repeat.trans.elog
+#   cust.data <- split.elog.list$cust.data
+#   dc.WriteLine("Started Building CBS and CBT for calibration period...")
+#   cbt.cal <- dc.BuildCBTFromElog(calibration.elog, statistic)
+#   cbt.cal.rep.trans <- dc.BuildCBTFromElog(repeat.transactions.elog, 
+#                                            statistic)
+#   cbt.cal <- dc.MergeCustomers(cbt.cal, cbt.cal.rep.trans)
+#   dates <- data.frame(cust.data$birth.per, cust.data$last.date, 
+#                       T.cal)
+#   cbs.cal <- my_dc.BuildCBSFromCBTAndDates(cbt.cal, dates, per, 
+#                                            cbt.is.during.cal.period = TRUE)
+#   dc.WriteLine("Finished building CBS and CBT for calibration period.")
+#   cbt.holdout <- NULL
+#   cbs.holdout <- NULL
+#   if (nrow(holdout.elog) > 0) {
+#     dc.WriteLine("Started building CBS and CBT for holdout period...")
+#     cbt.holdout <- dc.BuildCBTFromElog(holdout.elog, statistic)
+#     dates <- c((T.cal + 1), T.tot)
+#     cbs.holdout <- my_dc.BuildCBSFromCBTAndDates(cbt.holdout, 
+#                                                  dates, per, cbt.is.during.cal.period = FALSE)
+#     cbt.holdout <- dc.MergeCustomers(cbt.cal, cbt.holdout)
+#     cbs.holdout <- dc.MergeCustomers(cbs.cal, cbs.holdout)
+#     dc.WriteLine("Finished building CBS and CBT for holdout.")
+#     dc.WriteLine("...Finished Making All CBS and CBT")
+#     return(list(cal = list(cbs = cbs.cal, cbt = cbt.cal), 
+#                 holdout = list(cbt = cbt.holdout, cbs = cbs.holdout), 
+#                 cust.data = cust.data))
+#   }
+#   dc.WriteLine("...Finished Making All CBS and CBT")
+#   return(list(cal = list(cbs = cbs.cal, cbt = cbt.cal), holdout = list(cbt = cbt.holdout, 
+#                                                                        cbs = cbs.holdout), cust.data = cust.data))
+# }
+# 
+# my_dc.BuildCBSFromCBTAndDates <- function (cbt, dates, per, cbt.is.during.cal.period = TRUE) 
+# {
+#   if (cbt.is.during.cal.period == TRUE) {
+#     dc.WriteLine("Started making calibration period CBS...")
+#     custs.first.dates <- dates[, 1]
+#     custs.last.dates <- dates[, 2]
+#     T.cal <- dates[, 3]
+#     if (length(custs.first.dates) != length(custs.last.dates)) {
+#       stop("Invalid dates (different lengths) in BuildCBSFromFreqCBTAndDates")
+#     }
+#     f <- rowSums(cbt)
+#     r <- as.numeric(difftime(custs.last.dates, custs.first.dates, 
+#                              units = "days"))
+#     T <- as.numeric(difftime(T.cal, custs.first.dates, units = "days"))
+#     x <- switch(per, day = 1, week = 7, month = 365/12, quarter = 365/4, 
+#                 year = 365)
+#     r = r/x
+#     T = T/x
+#     cbs = cbind(f, r, T)
+#     rownames(cbs) <- rownames(cbt)
+#     colnames(cbs) <- c("x", "t.x", "T.cal")
+#   }
+#   else {
+#     dc.WriteLine("Started making holdout period CBS...")
+#     date.begin.holdout.period <- dates[1]
+#     date.end.holdout.period <- dates[2]
+#     f <- rowSums(cbt)
+#     T <- as.numeric(difftime(date.end.holdout.period, date.begin.holdout.period, 
+#                              units = "days")) + 1
+#     x <- switch(per, day = 1, week = 7, month = 365/12, quarter = 365/4, 
+#                 year = 365)
+#     T = T/x
+#     cbs = cbind(f, T)
+#     rownames(cbs) <- rownames(cbt)
+#     colnames(cbs) <- c("x.star", "T.star")
+#   }
+#   dc.WriteLine("Finished building CBS.")
+#   return(cbs)
+# }

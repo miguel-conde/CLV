@@ -208,7 +208,10 @@ bgbb.PlotFrequencyInCalibration(params = params,
 # transactions in the calibration period from the total number of transactions. We
 # remove the initial transactions first as we are not concerned with them.
 
+#####
+
 # Auxiliary Event log - nos quedamos solo con las trasacciones de repetición
+# de TODO el event lo original
 aux_elog <- dc.SplitUpElogForRepeatTrans(elog)$repeat.trans.elog
 
 # En x.start vamos a añadir a cal.cbs las frecuencias de holdout
@@ -218,108 +221,98 @@ elog.custs <- aux_elog$cust
 
 # Recorremos por fila cal.cbs
 for (i in 1:nrow(cal.cbs)){
+  # Para el cliente i de la CBS calibrado...
   current.cust         <- rownames(cal.cbs)[i]
-  tot.cust.trans       <- length(which(aux_elog == current.cust))
+  # ...miro el total de transacciones en calibrado + holdout,
+  tot.cust.trans       <- length(which(elog.custs == current.cust))
+  # miro también las transacciones solo de calibrado...
   cal.trans            <- cal.cbs[i, "x"]
+  # ... en la columna x.start de la CBS de calibrado meto la diferencia,
+  # que son las transacciones de holdout
   cal.cbs[i, "x.star"] <- tot.cust.trans - cal.trans
 }
 
-round(cal.cbs[1:3,], digits = 3)
+round(cal.cbs, digits = 3)
 
+#####
+cal_holdout_data <- dc.ElogToCbsCbt(elog, per="month", end.of.cal.period)
 
-# Intento 1 ---------------------------------------------------------------
+cal.rf.matrix <- 
+  my_dc.MakeRFmatrixCal(frequencies = cal_holdout_data$cal$cbs[,"x"], 
+                        periods.of.final.purchases = cal_holdout_data$cal$cbs[,"t.x"], 
+                        num.of.purchase.periods = trans.opp)
 
+holdout.rf.matrix <- 
+  my_dc.MakeRFmatrixCal(frequencies = cal_holdout_data$cal$cbs[,"x"], 
+                        periods.of.final.purchases = cal_holdout_data$cal$cbs[,"t.x"], 
+                        num.of.purchase.periods = trans.opp, 
+                        holdout.frequencies = cal_holdout_data$holdout$cbs[,"x.star"])
 
+# Now we can see how well our model does in the holdout period.
+comp <- my_bgbb.PlotFreqVsConditionalExpectedFrequency(params = params, 
+                                                       n.star = 12, 
+                                                       rf.matrix = cal.rf.matrix,
+                                                       x.star = holdout.rf.matrix[, "x.star"])
 
-library(BTYD)
-
-## Data Preparation
-
-rf_matrix <- rf_feb %>% 
-  rename(x = f, t.x = r, n.cal = `T`, custs = n)
-
-## Parameter Estimation
-
-params   <- bgbb.EstimateParameters(rf.matrix)
-LL       <- bgbb.rf.matrix.LL(params, rf.matrix)
-p.matrix <- c(params, LL)
-
-for (i in 1:2){
-  params       <- bgbb.EstimateParameters(rf.matrix, params);
-  LL           <- bgbb.rf.matrix.LL(params, rf.matrix);
-  p.matrix.row <- c(params, LL);
-  p.matrix     <- rbind(p.matrix, p.matrix.row);
-}
-colnames(p.matrix) <- c("alpha", "beta", "gamma", "delta", "LL")
-rownames(p.matrix) <- 1:3
-p.matrix
-
-bgbb.PlotTransactionRateHeterogeneity(params)
-bgbb.PlotDropoutRateHeterogeneity(params)
-
-## Individual Level Estimations
-
-# number of repeat transactions we expect a newly-acquired customer to make in 
-# a period of 36 months
-bgbb.Expectation(params, n = 36)
-
-# A, who made 0 transactions in the calibration period; 
-# customer A
-n.cal  = 7  # number of transaction opportunities in the calibration period.
-n.star = 10 # number of transaction opportunities in the holdout period,
-x      = 0  # number of repeat transactions made by the customer in the calibration period.
-t.x    = 0  # ecency - the transaction opportunity in which the customer made their last transaction
-bgbb.ConditionalExpectedTransactions(params, n.cal,
-                                     n.star, x, t.x)
-
-
-# and B, who made 4 transactions in the calibration period, with the last 
-# transaction occuring in the 5th month.
-# customer B
-x   = 23
-t.x = 30
-bgbb.ConditionalExpectedTransactions(params, n.cal,
-                                     n.star, x, t.x)
-## Plotting/ Goodness-of-fit
-
-bgbb.PlotFrequencyInCalibration(params, rf.matrix)
-
-
-
-# Intento 2 ---------------------------------------------------------------
-
-# Event log
-elog_feb <- simul_feb %>% 
-  rename(cust = id) %>% 
-  mutate(sales = coalesce(is.na(sales), 0)) %>% 
-  filter(sales != 0)
-
-cal.rf.matrix <- rf_feb %>% 
-  rename(x = f, t.x = r, custs = n, n.cal = T) %>% 
-  as.matrix()
-
-max(elog_feb$date);
-min(elog_feb$date);
-
-T.cal <- as.Date("2021-12-31")
-simData <- dc.ElogToCbsCbt(elog_feb, per="month", T.cal)
-
-# CALIBRATION RF MATRIX
-cal.cbs <- simData$cal$cbs
-freq    <- cal.cbs[,"x"]
-rec     <- cal.cbs[,"t.x"]
-
-trans.opp <- 24 # transaction opportunities
-cal.rf.matrix <- dc.MakeRFmatrixCal(freq, rec, trans.opp)
-cal.rf.matrix[1:5,]
-
-# HOLDOUT RF MATRIX
-holdout.rf.matrix <- dc.MakeRFmatrixHoldout(simData$holdout$cbt)
+rownames(comp) <- c("act", "exp", "bin")
+round(comp, digits = 3)
 
 ##
+comp <- my_bgbb.PlotRecVsConditionalExpectedFrequency(params = params, 
+                                                      n.star = 12, 
+                                                      rf.matrix = cal.rf.matrix,
+                                                      x.star = holdout.rf.matrix[, "x.star"])
+rownames(comp) <- c("act", "exp", "bin")
+comp
 
-params   <- bgbb.EstimateParameters(cal.rf.matrix)
-LL       <- bgbb.rf.matrix.LL(params, cal.rf.matrix)
+##
+inc.track.data <- elog %>% group_by(year(date), month(date)) %>% summarise(n = sum(sales)) %>% pull(n)
+# xtickmarks <- 1996:2006
+xtickmarks <- 1:35
+inc.tracking <- bgbb.PlotTrackingInc(params = params, 
+                                     rf.matrix = cal.rf.matrix,
+                                     actual.inc.repeat.transactions = inc.track.data,
+                                     xticklab = xtickmarks)
+
+rownames(inc.tracking) <- c("act", "exp")
+inc.tracking
+
+##
+cum.track.data <- cumsum(inc.track.data)
+
+cum.tracking <- bgbb.PlotTrackingCum(params                         = params, 
+                                     rf.matrix                      = cal.rf.matrix, 
+                                     actual.cum.repeat.transactions = cum.track.data,
+                                     xticklab                       = xtickmarks)
+
+rownames(cum.tracking) <- c("act", "exp")
+cum.tracking
+
+
+# AL GRANO ----------------------------------------------------------------
+
+# Data preparation --------------------------------------------------------
+
+# Event log
+elog <- elog_feb %>% rename(cust = id)
+elog
+
+end.of.cal.period <- as.Date("2021-12-31")
+
+cal_holdout_data <- dc.ElogToCbsCbt(elog, per="month", end.of.cal.period)
+trans.opp <- 22 # transaction opportunities, cohorte feb => 23 - 1 (1ª transacción)
+
+rf.matrix <- 
+  my_dc.MakeRFmatrixCal(frequencies                = cal_holdout_data$cal$cbs[,"x"], 
+                        periods.of.final.purchases = cal_holdout_data$cal$cbs[,"t.x"], 
+                        num.of.purchase.periods    = trans.opp, 
+                        holdout.frequencies        = cal_holdout_data$holdout$cbs[,"x.star"])
+
+# Parameter Estimation ----------------------------------------------------
+
+params <- bgbb.EstimateParameters(cal.rf.matrix)
+
+LL <- bgbb.rf.matrix.LL(params, cal.rf.matrix)
 p.matrix <- c(params, LL)
 
 for (i in 1:2){
@@ -328,7 +321,6 @@ for (i in 1:2){
   p.matrix.row <- c(params, LL)
   p.matrix     <- rbind(p.matrix, p.matrix.row)
 }
-
 colnames(p.matrix) <- c("alpha", "beta", "gamma", "delta", "LL")
 rownames(p.matrix) <- 1:3
 p.matrix
@@ -336,15 +328,19 @@ p.matrix
 bgbb.PlotTransactionRateHeterogeneity(params)
 bgbb.PlotDropoutRateHeterogeneity(params)
 
-## Individual Level Estimations
 
-# number of repeat transactions we expect a newly-acquired customer to make in 
-# a period of 36 months
-bgbb.Expectation(params, n = 36)
+# Individual level estimation ---------------------------------------------
+
+# number of transactions we expect a newly acquired customer
+# to make in a given time period
+bgbb.Expectation(params, n=10)
+
+# say something about our existing customers, not
+# just about a hypothetical customer to be acquired in the future
 
 # A, who made 0 transactions in the calibration period; 
 # customer A
-n.cal  = 24 # number of transaction opportunities in the calibration period.
+n.cal  = 22 # number of transaction opportunities in the calibration period.
 n.star = 12 # number of transaction opportunities in the holdout period,
 x      = 0  # number of repeat transactions made by the customer in the calibration period.
 t.x    = 0  # recency - the transaction opportunity in which the customer made their last transaction
@@ -359,55 +355,62 @@ x   = 23
 t.x = 30
 bgbb.ConditionalExpectedTransactions(params, n.cal,
                                      n.star, x, t.x)
-## Plotting/ Goodness-of-fit
 
-bgbb.PlotFrequencyInCalibration(params, cal.rf.matrix)
+# We can also obtain expected characteristics for a specific customer, conditional 
+# on their purchasing behavior during the calibration period.
+cal.cbs["516",]
 
-cal.rf.matrix %>% as_tibble() %>% group_by(x) %>% summarise(custs = sum(custs)) %>% as.data.frame()
+x     <- cal.cbs["516", "x"]
+t.x   <- cal.cbs["516", "t.x"]
+n.cal <- cal.cbs["516", "T.cal"]
+bgbb.ConditionalExpectedTransactions(params, n.cal,
+                                     n.star, x, t.x)
 
-####
-# holdout.cbs <- simData$holdout$cbs
-# x.star <- holdout.cbs[,"x.star"]
+bgbb.PAlive(params, x, t.x, n.cal)
 
-# holdout.cbs <- simData$holdout$cbs
-# freq    <- holdout.cbs[,"x"]
-# rec     <- holdout.cbs[,"t.x"]
-# 
-# trans.opp <- 12 # transaction opportunities
-# holdout.cbs.rf.matrix <- dc.MakeRFmatrixCal(freq, rec, trans.opp)
+# Plotting/ Goodness-of-fit -----------------------------------------------
 
-# Actual vs. conditional expected transactions in the holdout period,
-# binned by calibration period frequency
-n.star <- 12 # length of the holdout period
-x.star <- holdout.rf.matrix[, "x.star"]
-comp <- bgbb.PlotFreqVsConditionalExpectedFrequency(params, n.star,
-                                                    cal.rf.matrix, x.star)
+bgbb.PlotFrequencyInCalibration(params = params,
+                                rf.matrix = cal.rf.matrix, 
+                                censor = 15)
 
+# Now we can see how well our model does in the holdout period.
+comp <- my_bgbb.PlotFreqVsConditionalExpectedFrequency(params = params, 
+                                                       n.star = 12, 
+                                                       rf.matrix = rf.matrix,
+                                                       x.star = rf.matrix[, "x.star"])
+
+rownames(comp) <- c("act", "exp", "bin")
+round(comp, digits = 3)
+
+##
+comp <- my_bgbb.PlotRecVsConditionalExpectedFrequency(params = params, 
+                                                      n.star = 12, 
+                                                      rf.matrix = rf.matrix,
+                                                      x.star = rf.matrix[, "x.star"])
 rownames(comp) <- c("act", "exp", "bin")
 comp
 
-# Actual vs. conditional expected transactions in the holdout period,
-# binned by calibration period recency.
-comp <- bgbb.PlotRecVsConditionalExpectedFrequency(params, n.star,
-                                                   rf.matrix, x.star)
-rownames(comp) <- c("act", "exp", "bin")
-comp
-
-# Actual vs. expected incremental purchasing behaviour.
-inc.track.data <- donationsSummary$annual.trans
-n.cal <- 6
-xtickmarks <- 1996:2006
-inc.tracking <- bgbb.PlotTrackingInc(params, rf.matrix,
-                                     inc.track.data,
+##
+inc.track.data <- elog %>% group_by(year(date), month(date)) %>% summarise(n = sum(sales)) %>% pull(n)
+xtickmarks <- 1:35
+inc.tracking <- bgbb.PlotTrackingInc(params = params, 
+                                     rf.matrix = rf.matrix,
+                                     actual.inc.repeat.transactions = inc.track.data,
                                      xticklab = xtickmarks)
+
 rownames(inc.tracking) <- c("act", "exp")
 inc.tracking
 
-# Actual vs. expected cumulative purchasing behaviour.
+##
 cum.track.data <- cumsum(inc.track.data)
-cum.tracking <- bgbb.PlotTrackingCum(params, rf.matrix, cum.track.data,
-                                     xticklab = xtickmarks)
+
+cum.tracking <- bgbb.PlotTrackingCum(params                         = params, 
+                                     rf.matrix                      = rf.matrix, 
+                                     actual.cum.repeat.transactions = cum.track.data,
+                                     xticklab                       = xtickmarks)
 
 rownames(cum.tracking) <- c("act", "exp")
 cum.tracking
+
 
