@@ -310,14 +310,14 @@ rf.matrix <-
 
 # Parameter Estimation ----------------------------------------------------
 
-params <- bgbb.EstimateParameters(cal.rf.matrix)
+params <- bgbb.EstimateParameters(rf.matrix)
 
-LL <- bgbb.rf.matrix.LL(params, cal.rf.matrix)
+LL <- bgbb.rf.matrix.LL(params, rf.matrix)
 p.matrix <- c(params, LL)
 
 for (i in 1:2){
-  params       <- bgbb.EstimateParameters(cal.rf.matrix, params)
-  LL           <- bgbb.rf.matrix.LL(params, cal.rf.matrix)
+  params       <- bgbb.EstimateParameters(rf.matrix, params)
+  LL           <- bgbb.rf.matrix.LL(params, rf.matrix)
   p.matrix.row <- c(params, LL)
   p.matrix     <- rbind(p.matrix, p.matrix.row)
 }
@@ -358,11 +358,11 @@ bgbb.ConditionalExpectedTransactions(params, n.cal,
 
 # We can also obtain expected characteristics for a specific customer, conditional 
 # on their purchasing behavior during the calibration period.
-cal.cbs["516",]
+cal_holdout_data$cal$cbs["516",]
 
-x     <- cal.cbs["516", "x"]
-t.x   <- cal.cbs["516", "t.x"]
-n.cal <- cal.cbs["516", "T.cal"]
+x     <- cal_holdout_data$cal$cbs["516", "x"]
+t.x   <- cal_holdout_data$cal$cbs["516", "t.x"]
+n.cal <- cal_holdout_data$cal$cbs["516", "T.cal"]
 bgbb.ConditionalExpectedTransactions(params, n.cal,
                                      n.star, x, t.x)
 
@@ -371,7 +371,7 @@ bgbb.PAlive(params, x, t.x, n.cal)
 # Plotting/ Goodness-of-fit -----------------------------------------------
 
 bgbb.PlotFrequencyInCalibration(params = params,
-                                rf.matrix = cal.rf.matrix, 
+                                rf.matrix = rf.matrix, 
                                 censor = 15)
 
 # Now we can see how well our model does in the holdout period.
