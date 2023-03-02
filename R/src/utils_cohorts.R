@@ -196,7 +196,8 @@ simul_N <- function(fecha_ini, fecha_fin,
     mutate(id = row_number(), .before = 1) %>% 
     gather(date, sales, -id) %>% 
     arrange(id) %>% 
-    mutate(date = as_date(date))
+    mutate(date = as_date(date)) %>% 
+    mutate(sales = ifelse(is.na(sales), 0, sales))
   
   return(out)
 }

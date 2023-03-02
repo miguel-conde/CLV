@@ -23,6 +23,7 @@ elog_feb <- simul_feb %>%
   filter(sales != 0)
 
 rf_matrix_feb <- elog_feb %>% 
+  filter(date >= as_date("2020-02-01"), date < as_date("2022-01-01")) %>% 
   build_rf_table()  %>% 
   rename(x = f, t.x = r, custs = n, n.cal = T) %>% 
   as.matrix()
@@ -401,6 +402,7 @@ inc.tracking <- bgbb.PlotTrackingInc(params = params,
 
 rownames(inc.tracking) <- c("act", "exp")
 inc.tracking
+
 
 ##
 cum.track.data <- cumsum(inc.track.data)
