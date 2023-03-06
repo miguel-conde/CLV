@@ -315,3 +315,47 @@ weatherFittedMLE$lowerEndpointMatrix
 weatherFittedMLE$upperEndpointMatrix
 
 weatherFittedMLE$logLikelihood
+
+
+# 5.3 Prediction ----------------------------------------------------------
+
+# A 3-days forward predictions from markovchain object can be generated as follows, 
+# assuming that the last two days were respectively “cloudy” and “sunny”.
+predict(object = weatherFittedMLE$estimate, newdata = c("cloudy", "sunny"),
+        n.ahead = 3)
+
+# Given an initial two years health status, the 5-year ahead prediction of any CCRC guest is
+predict(mcCCRC, newdata = c("H", "H"), n.ahead = 5)
+
+
+# 5.4 Statistical Tests ---------------------------------------------------
+
+# In this section, we describe the statistical tests: 
+  # - ssessing the Markov property (verifyMarkovProperty),
+  # - the order (assessOrder), 
+  # - the stationary (assessStationarity) of a Markov chain sequence,
+  # - and the divergence test for empirically estimated transition matrices (divergenceTest).
+
+sample_sequence<-c("a", "b", "a", "a", "a", "a", "b", "a", "b", "a",
+                   "b", "a", "a", "b", "b", "b", "a")
+verifyMarkovProperty(sample_sequence)
+
+data(rain)
+assessOrder(rain$rain)
+
+assessStationarity(rain$rain, 10)
+
+sequence <- c(0,1,2,2,1,0,0,0,0,0,0,1,2,2,2,1,0,0,1,0,0,0,0,0,0,1,1,
+            2,0,0,2,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,2,1,0,
+            0,2,1,0,0,0,0,0,0,1,1,1,2,2,0,0,2,1,1,1,1,2,1,1,1,1,1,1,1,1,1,0,2,
+            0,1,1,0,0,0,1,2,2,0,0,0,0,0,0,2,2,2,1,1,1,1,0,1,1,1,1,0,0,2,1,1,
+            0,0,0,0,0,2,2,1,1,1,1,1,2,1,2,0,0,0,1,2,2,2,0,0,0,1,1)
+mc <- matrix(c(5/8, 1/4, 1/8, 1/4, 1/2, 1/4, 1/4, 3/8, 3/8), byrow = TRUE, nrow = 3)
+rownames(mc) <- colnames(mc) <- 0:2
+
+theoreticalMc <- as(mc, "markovchain")
+
+verifyEmpiricalToTheoretical(data = sequence, object = theoreticalMc)
+
+data(kullback)
+verifyHomogeneity(inputList = kullback, verbose = TRUE)

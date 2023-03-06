@@ -1,5 +1,9 @@
 
 # LIBRARIES & SOURCES -----------------------------------------------------
+library(tidyverse)
+library(markovchain)
+
+N <- 1000
 
 
 # FUNCTIONS ---------------------------------------------------------------
@@ -117,16 +121,18 @@ fvals <- function(mchain, initialstate, n) {
 # DATA --------------------------------------------------------------------
 
 the_data <- list()
+N_obs <- 36
 
 for (i in 1:N) {
   fst_1 <- rgeom(1, 1/24) + 1
   # print(fst_1)
-  the_data[[i]] <- c(rep(0, fst_1-1), 1)
+  the_data[[i]] <- c(rep("A", fst_1-1), "D")[1:N_obs]
+  the_data[[i]][is.na(the_data[[i]])] <- "D"
   names(the_data[[i]]) <- paste0("t_", 1:length(the_data[[i]]))
 }
 
 
-tbl_data <- bind_rows(the_data) %>% mutate_all(~ ifelse(is.na(.), 1, .))
+tbl_data <- bind_rows(the_data) %>% mutate_all(~ ifelse(is.na(.), "D", .))
 
 # CHICHA ------------------------------------------------------------------
 
@@ -161,10 +167,66 @@ mcFitBSP <- markovchainFit(data = tbl_data,
 
 
 
-mclistFit <- markovchainListFit(tbl_data, byrow = TRUE, laplacian = 0, name)
+mclistFit <- markovchainListFit(tbl_data, byrow = TRUE, laplacian = 0, name = "List MC")
 
-predict(mclistFit$estimate, c("0", "0"), n.ahead = 150, continue = FALSE)
-predict(mclistFit$estimate, c("0", "0"), n.ahead = 100, continue = TRUE)
+predict(mclistFit$estimate, c("A", "A"), n.ahead = 150, continue = FALSE)
+predict(mclistFit$estimate, c("D", "D"), n.ahead = 100, continue = TRUE)
 
 predict(mclistFit$estimate, c("0", "0"), n.ahead = 200, continue = FALSE)
 predict(mclistFit$estimate, c("0", "0"), n.ahead = 200, continue = TRUE)
+
+
+# PREDIC ------------------------------------------------------------------
+
+my_mclist_predict <- function(mclistFit_estimate, seq_prev, n_ahead) {
+  
+  fst_pred_state <- length(seq_prev)
+  lst_pred_state <- min(n_ahead+fst_pred_state-1, 
+                        length(mclistFit_estimate@markovchains))
+  
+  act_state <- vector(mode = "list", length = lst_pred_state - fst_pred_state + 2)
+  act_state[[1]] = as.numeric(mclistFit_estimate[[1]]@states == tail(seq_prev,1))
+  names(act_state[[1]]) <- mclistFit_estimate[[1]]@states
+  
+  for (i in fst_pred_state:lst_pred_state) {
+    act_state[[i]] <- act_state[[i-1]] * mclistFit_estimate@markovchains[[i]]
+  }
+  
+  out <- act_state[-1] %>% 
+    lapply(as.data.frame) %>% 
+    bind_rows() %>% 
+    mutate(t = fst_pred_state:lst_pred_state, .before = 1) %>% 
+    rowwise() %>% 
+    mutate(pred = mclistFit_estimate[[1]]@states[which(c_across(2:ncol(.)) == max(c_across(2:ncol(.))))]) %>% 
+    ungroup()
+  
+  return(out)
+}
+
+
+my_mclist_predict(mclistFit$estimate, seq_prev = c("A", "A"), n_ahead = 18)
+predict(mclistFit$estimate, newdata = c("A", "A"), n.ahead = 18)
+
+rmarkovchain(20, mcCCRC, what = "list")
+
+predict(mcCCRC, newdata = c("H", "H"), n.ahead = 5)
+my_mclist_predict(mcCCRC, seq_prev = c("H", "H"), n_ahead = 5)
+
+
+kk <- tibble(A = sapply(tbl_data, function(x) sum( x=="A")), 
+             B = sapply(tbl_data, function(x) sum(x == "D"))) %>%
+  mutate(rr = c(.$A[1] / (.$A[1]+.$B[1]), (A/lag(A))[-1]), 
+         churn_rate = 1 - rr, 
+         survivor_fun = cumprod(rr))
+kk
+
+kk$rr %>% plot(type = "l")
+kk$rr %>% density() %>% plot()
+
+kk$churn_rate %>% plot(type = "l")
+kk$churn_rate %>% density() %>% plot()
+
+kk$survivor_fun %>% plot(type = "l")
+
+kk$survivor_fun %>% sum()
+
