@@ -120,6 +120,33 @@ fvals <- function(mchain, initialstate, n) {
 
 # DATA --------------------------------------------------------------------
 
+make_time_to_event_dataset <- function(N_t, N, p, states = c("A", "D"),
+                                       seed = NULL, format = c("list", "data.frame")) {
+  
+  format <- match.arg(format, c("list", "data.frame"))
+  
+  the_data <- list()
+  
+  set.seed(seed)
+  for (i in 1:N) {
+    fst_1 <- rgeom(1, p) + 1
+    the_data[[i]] <- c(rep(states[1], fst_1-1), states[2])[1:N_t]
+    the_data[[i]][is.na(the_data[[i]])] <- states[2]
+    names(the_data[[i]]) <- paste0("t_", 1:length(the_data[[i]]))
+  }
+  
+  if (format == "list") return(the_data)
+  
+  tbl_data <- bind_rows(the_data) %>% mutate_all(~ ifelse(is.na(.), "D", .))
+  
+  return(tbl_data)
+}
+
+make_time_to_event_dataset(N_t = 36, N = N, p = 1/24)
+make_time_to_event_dataset(N_t = 36, N = N, p = 1/24, format = "data.frame")
+make_time_to_event_dataset(N_t = 36, N = N, p = 1/24, 
+                           states = c("Alive", "Death"), format = "data.frame")
+
 the_data <- list()
 N_obs <- 36
 
@@ -197,7 +224,7 @@ my_mclist_predict <- function(mclistFit_estimate, seq_prev, n_ahead) {
     bind_rows() %>% 
     mutate(t = fst_pred_state:lst_pred_state, .before = 1) %>% 
     rowwise() %>% 
-    mutate(pred = mclistFit_estimate[[1]]@states[which(c_across(2:ncol(.)) == max(c_across(2:ncol(.))))]) %>% 
+    mutate(pred = mclistFit_estimate[[1]]@states[which(c_across(2:ncol(.)) == max(c_across(2:ncol(.))))[1]]) %>% 
     ungroup()
   
   return(out)
